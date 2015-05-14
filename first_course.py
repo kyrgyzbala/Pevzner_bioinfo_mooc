@@ -2,6 +2,7 @@ import sys
 from timeit import Timer
 from Bio import Seq
 from Bio import SeqIO
+from collections import Counter
 
 def occurences(text, word):
     count= 0
@@ -76,16 +77,16 @@ def pattern2number(pattern):
 
 def dec2base4(number):
 
-    if number<4:
+    if number < 4:
         return str(number)
     else:
-        return dec2base4(number/4)+str(number%4)
+        return dec2base4(number/4)+str(number % 4)
 
 
-def number2pattern(number,n):
-    alphabet = {0:'A',1:'C',2:'G',3:'T'}
+def number2pattern(number, n):
+    alphabet = {0: 'A', 1: 'C', 2: 'G', 3: 'T'}
     str_num = ''.join(alphabet[int(s)] for s in str(dec2base4(number)))
-    if len(str_num)<n:
+    if len(str_num) < n:
         str_num = ''.join(alphabet[0] for i in range(n-len(str_num)))+str_num
     return str_num
 
@@ -236,91 +237,116 @@ def motifenumeration(dna, k, d):
     return set(patterns)
 
 
+def distance_between_pattern_and_strings(pattern, dna):
+    k = len(pattern)
+    distance = 0
+
+    for text in dna:
+        min_ham_dist = 10e200 # very big number
+        for i in range(len(text)-k+1):
+            kmer = text[i:i+k]
+            cur_ham_dist = hammingdistance(pattern, kmer)
+            if cur_ham_dist < min_ham_dist:
+                min_ham_dist = cur_ham_dist
+        distance += min_ham_dist
+    return distance
+
+
+def median_string(dna, k):
+
+    distance, median = None, None
+
+    for i in range(pow(4, k)):
+        pattern = number2pattern(i, k)
+        pattern_distance = distance_between_pattern_and_strings(pattern, dna)
+        if not distance or distance > pattern_distance:
+            distance = pattern_distance
+            median = pattern
+    return median
+
+
+def profile_probable(text, k, profile):
+    prob_score, prob_kmer = 0, None
+    t2n = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+
+    for i in range(len(text)-k+1):
+        kmer = text[i:i+k]
+        tmp_score = 1
+        for pos, c in enumerate(kmer):
+            tmp_score *= profile[t2n[c]][pos]
+        if not prob_kmer:
+            prob_score = tmp_score
+            prob_kmer = kmer
+            continue
+
+        if tmp_score > prob_score:
+            prob_score = tmp_score
+            prob_kmer = kmer
+
+    return prob_kmer
+
+def create_profile_matrix(motifs):
+    profile = [[], [], [], []]
+    for i in range(len(motifs[0])):
+        column = [l[i] for l in motifs]
+        profile[0].append(column.count('A'))
+        profile[1].append(column.count('C'))
+        profile[2].append(column.count('G'))
+        profile[3].append(column.count('T'))
+    return profile
+
+
+def build_consensus(motifs):
+    cons = []
+    for i in range(len(motifs[0])):
+        column = [l[i] for l in motifs]
+        cons.append(Counter(column).most_common()[0][0])
+    return ''.join(cons)
+
+
+def motif_score(motifs):
+    consensus = build_consensus(motifs)
+    score = 0
+    for motif in motifs:
+        score += hammingdistance(consensus, motif)
+
+    return score
+
+
+def greedy_motif_search(dna, k, t):
+
+    best_motifs = []
+    for strand in dna:
+        best_motifs.append(strand[:k])
+
+    base_strand = dna[0]
+    other_strands = [l.strip() for l in dna[1:]]
+
+    for i in range(len(base_strand)-k+1):
+        kmer = base_strand[i:i+k]
+        motifs = [kmer]
+
+        for strand in other_strands:
+            profile_matrix = create_profile_matrix(motifs)
+            next_motif = profile_probable(strand, k, profile_matrix)
+            motifs.append(next_motif)
+
+        if motif_score(motifs)< motif_score(best_motifs):
+            best_motifs = motifs
+    return best_motifs
 
 
 if __name__=='__main__':
 
+
     lines = open('data.txt').readlines()
-    k, d = lines[0].strip().split()
-    k, d = int(k), int(d)
+    k, t = lines[0].strip().split()
+    k, t = int(k), int(t)
     dna = [l.strip() for l in lines[1:]]
-    # dna = ['ATTTGGC', 'TGCCTTA', 'CGGTATC', 'GAAAATT']
-    print ' '.join(motifenumeration(dna, k, d))
-    
-    # print len(neighbors('CCCC',3))
-    #     print n
+
+    for m in greedy_motif_search(dna, k, t):
+        print m
 
 
-    # gnm_seq = SeqIO.read('Salmonella_enterica.txt','fasta')
-    # min_skew_coord = minimumskew(gnm_seq)[0]
-    # window = gnm_seq[min_skew_coord-250:min_skew_coord+250]
-    # print frequentwordsmismatch_rc(window,9,1)
 
 
-    # lines = open('data.txt').readlines()
-    # text=lines[0].strip()
-    # k,d=lines[1].strip().split()
-    # k,d = int(k), int(d)
-    # print frequentwordsmismatch_rc(text, k, d)
-
-    # lines = open('data.txt').readlines()
-    # text=lines[0].strip()
-    # word=lines[1].strip()
-    # d=int(lines[2])
-    # print approximatepatterncount('TACGCATTACAAAGCACA', 'AA', 1)
-
-    # lines = open('data.txt').readlines()
-    # pattern=lines[0].strip()
-    # genome=lines[1].strip()
-    # d=int(lines[2])
-    # print approximatepattern(pattern, genome, d)
-
-    # print pattern2number('ACTGCTCTAAACCTTGGT')
-    # print number2pattern(8657,10)
-
-    # text = 'GCGGTTATGCACCGTTCAAATTAGCAAACCACTAAGCGACGTAGTCTGGATTGATTTCTCCCTACCAGTGACCCAAGACGCGTTAGTGAGTTAAGTTCATATCCAGTACCTGCCGCCCTCTGTACTTGGGCGTCCGATTCGCATGCTTACTCAGGTGGAGGACACGATAATCTGATTAAACTGAGCTAAACCAGGTGGAACCAGAAACCAGGTGGGGAGTCTCGCTTCAAGCCGTTCTTGCGATCAAACCAGGTGGTCCATTATGAAACCAGGTGGCTAAACCAGGTGGTCCAGATCCTCGAATGATGTCGGTGCACATCAAAACCAGGTGGGGTGGTGGAACGTAAAACCAGGTGGCATAAACCAGGTGGGCCGGTTCGTAAACCAGGTGAAACCAGGTGGGGTGGAAACCAGGTGGGTTACAAATTACGTTGAGATGGCCCAAACCAGGTGGTGGGCTTCACCCATGTCAACAAACCACCCTATGGAACTAAACCAGGTGGAACCAGGTGGTGAAGGCTTATCCTCAGGAAAAACCAGGTGGAGGTGGTGAAATAAAACCAGGTGGACCAGGTGGATAACCCTCGCCTCGCTTCTCAACCGAGACCTGGATAAACCAGGTGGGGTGGTCCACCGATTTTTGAGACACTAGAAACCAGGTGGGCGGGGAAACCAGGTGGCAAACCAGGTGGGGTGGACGGAAACCAGGTGGATATGTCATAAAACCAAACCAGGTGGTGCACCCCCATGGTGTGTCTTATCCGTGCGTATAAACCAGGTGGTCGCACGGCTTCCACTTGCTGAGAATAGGCCCGCAGGGTCAGTGCCATGCCCTCCGTCACTCGATATGTGTTGTAAGAGTGGTTACCCCTTCATTGAAGTCGCCCACAGCCCCACCTGCATTGCTAGACTATCACCCTACAGTAGGCCTTTTCGCCTTCTTCAAGCAGCAATCTCTTATCCGCGGATGGGCGCGGCGAGCGTGGCGTCCCCGAACATTTTTACCTAACGTGTTTTGTTGGCCGCAAGCCTTCCCTCTAGTCCACCTCAGCCATTCAGCCTAGTAGCTTTCAAGCCGAGCCTTCCATATCTAATGGACCGTCCAGAATTTCACACGTTTCACAGGGCTGTGTTCGACCGCCCGTAATGCTGTTTCACAGGCGATCGCCTTGCGGTTTTTTCACAGATCGCAGCCGATGGACATGCCAACTCGATTTTCACAGAGTTTTTCACAGCGGTTTCACAGCACAGCAGTGATTGTTTCACAGCAATTTTCACTTTCACAGGGGCCCTTTTCACAGCTCAGGGCTCTTTTCACTTTCACAGTTTCACAGCGCTCCTTTCACAGAGCGGGGAAATTTAAGGGAACACTCAAGGGAACAAGGGAACACACAAAGGGAACACAACACAACACATAAGGGAACACTTTCACAGAACACAAAAGTCCGAAATCATCAGCGGCGAAGGGATTTCACAGACAGACACTTTCACAGCGCATTTCACAGATACGTACTTTCACAGGCGTACTTTCACAGACTTTCACAGAGGACAAGCTCAATTTTCACAGACAGGCTGGATAAATTTCACAGCGGTAAGGGTTTCACAGCACACATAAGGGAACACGAATTTCACAGCAGGGAACACCTCTACGAGTAATCTATTACTCTACCTACTGAAGGGAACACACCGAAGACCTACTATTACCTATTACTCTTAAAGGGAACACATTACAAGGGAACACACTCTCTCGTCATATCTCACCTCTCTATTACTCTTAAGGGAACACCTTCTCGATCAACCTATTACTCTATGGAGATAGAGATATTCCAGACATATGGAGATAACATGGAGATATGGAGATAATGGAGATGGAGATAGCTCTTATATTTATCCTATGGAGATATGATACTATTAATGGAGATAATTCTAATGGAGATATAATTACTCTAAGAGGATGGGATCTCGGGCTATTACTCTAATGGAGATAAGCACTATTACTCTAGGAAATGGAGATATGTCAATGGAGATATGTAATGGAGATAGAGGGAGATGGAGTCGCCATTTCATAATCGCCATTTCATAGTTCAGGAATCGCCATTTCCGCCATTTCTAAGATGGAGTCGCCATTTCTACGTATGGAGATAGGATCGCCATTTCATACGACCCGTTGGATATCGCCATTTCCTCGCCATTTCTGGTGACATTTCTCGCCATTTCATTTCTGGAGATAGATGGATCTCGCCATTTCATAGGAATCGCCATTTCCACGTAGGGGGGGCCACAATCCGTAGGTCGGAATTCAGACTCGCCATTTCCCATCGCCATTTCTTCACCTGTATGCCGATCCCTTCGCCATTTCTCATGGAGATAACTCTCTCTCGCCATTTCTCGCCATTTCCATTTCACTCTCATTCGCCATCGCCATTTCCATTCGCCATTTCATCGCCATTTCTTCAGGATAAGATATCGCCATTTCGACTCTCATTCGCATACTGACTCTCATTCTCATCTCGCCATTTCTCATCTGACTCTCATCCTGGGGGAAACTTGCGACTCTCATCACACTTCCGTCGACTCTCATACTGGCGGATAGCATAGGAGCCATTTAAAGACTCTCATTCTCATTCGAGACTCTCATTCAAATCCTACGAGGACTCTCATATAGACTCTCATATCATTACGAGGACTCTCATATACGAGCCATGCATGTGGCGACGACTCTCATCTACGAGCCATGCAAGCAGAATCTACGAGCGACTCTCATTACGAGCCATGTGACCGTACGAGCCATGCATGCATGCCATGCTGACTCTCATCGAGTACGAGCCATGGAAGTTCTTGTTGGTTCGTAGCCCAAGAGCTGAAGTTACGAGCCTACGAGCCATGAAGTTACTTTTACGAGCCATGAAGCTTACGATACGAGCCATGCGAGCCATGCATCCGCGCTACGAGCCATGTTCCAGTACGAGCCATGTTAGTTGCTGAAGTTAAGTTTGGCGCTGAAGTTTGTACGAGCCATGTGCCCGCTGAAGTTTGTTGTACGAGCCATGCATGCTGAAGTTAATGGCTGAAGTTAGCGTTTGCGGGCAGATCCTCATTCTACGATACGAGCCATGCCATGCAGCTGAAGTTAAGTTGGGTTACGAGCCATGCGAGCCATGTGAAGTACGAGCCATGCTGGCTGAAGTTGTTTGTGCTGCTGAAGTTGCTCTTGTCTCTAGCTGAAGTTGCCAACAGGGCTGAAGCTGAAGTTTAAGCTGAAGTTGCGAGCAGGCTGAAGTTATCGGATTGGGGCTGAAGTTCAACCTCCCGTCCCCCCACACTATATTCCCGTCCCCCCCCGCGCACGCGCCGTCTCCCGTCCCCCCTATCCCGTGCGCACGCGACGCGATCCCGTCCCCCCAGAGTGCGCGCACGCGTCCCCCTTCCCGTCCCCCTCTCCCGGGCGCACGCGTCGCTCAACATTTCCGCGCACGCGTCGCGCACGCGGGCGCACGCGGGTCCCGTCCCCCCCCCTCTTCGGCGCACGCGGAATTCCCGTCGCGCACGCGTCCCGTCCCGCGCACGCGTCGCGCACGCGACTGCCCTAACCAACAGTGCGCACGCGCCGGTAACCCGGTAACCCGGTAACCGCGCACGCGGGCGCACGCGCGTAACCCGCGCACGCGCCGCGCACGCGGCCCGGTTCCCGTCCCCCCCGGTAACCCGGTAACTCCCGTCCCCCGTAACCCGGTGCGCACGCGCCCGGCGCACGCGGAGCGCACGCGCCCCCCCCGGTAATAGCGCACGCGCCCGGGCGCACGCGCCCGGTAACCCGGTAACCCGGGCGCGCGCACGCGGCGGCGCACGCGGCGCACGCGGCGCACGCG'
-    # k = 11
-    # l = 566
-    # t = 18
-    # clumptask()
-
-    # lines = open('data.txt').readlines()
-    # text = lines[0].strip()
-    # print text
-    # k = int(lines[1].strip())
-    # print k
-    # freq = computingfrequencies(text, k)
-    # print ' '.join(str(v) for v in freq.values())
-
-    # Problem 1
-    # lines = open('data.txt').readlines()
-    # text= 'GACCATCAAAACTGATAAACTACTTAAAAATCAGT'
-    # word= 'AAA'
-    # print occurences(text, word)
-
-    # Problem 2
-    # lines = open('data.txt').readlines()
-    # text= lines[0].strip()
-    # k= int(lines[1].strip())
-    # text= 'CGGAGGACTCTAGGTAACGCTTATCAGGTCCATAGGACATTCA'
-    # k= 3
-    # print " ".join(frequentwords(text, k))
-
-    # text= 'CGGAGGACTCTAGGTAACGCTTATCAGGTCCATAGGACATTCA'
-    # k= 3
-    # print " ".join(fasterfrequentwords(text, k))
-
-    # text = open('data.txt').readlines()[0].strip()
-    # word = 'CTTGATCAT'
-    # text = 'CGGACTCGACAGATGTGAAGAACGACAATGTGAAGACTCGACACGACAGAGTGAAGAGAAGAGGAAACATTGTAA'
-    # k,l,t = 9, 50, 4
-    # findclumps(text,k,l,t)
-    # print " ".join([str(p) for p in positions(text, word)])
-    
-    # text = open('data.txt').readline()
-    # print " ".join([str(d) for d in minimumskew('GATACACTTCCCGAGTAGGTACTG')])
-
-    # lines = open('data.txt').readlines()
-    # seq1='ATGCCTTACCTAGATGCAATGACGGACGTATTCCTTTTGCCTCAACGGCTCCT'
-    # seq2='CTTGAAGTGGACCTCTAGTTCCTCTACAAAGAACAGGTTGACCTGTCGCGAAG'
-    # print hammingdistance(seq1, seq2)
