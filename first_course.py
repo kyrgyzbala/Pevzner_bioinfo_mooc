@@ -43,6 +43,7 @@ def positions(text, word):
     return poss
 
 
+
 def generate_kmer_map(k):
     alphabet=['A','T','G','C']
     kmer=[]
