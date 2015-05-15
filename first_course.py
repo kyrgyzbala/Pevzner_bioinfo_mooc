@@ -3,6 +3,7 @@ from timeit import Timer
 from Bio import Seq
 from Bio import SeqIO
 from collections import Counter
+import random
 
 def occurences(text, word):
     count= 0
@@ -287,12 +288,17 @@ def profile_probable(text, k, profile):
 
 def create_profile_matrix(motifs):
     profile = [[], [], [], []]
+    letters = ['A', 'C', 'G', 'T']
     for i in range(len(motifs[0])):
         column = [l[i] for l in motifs]
-        profile[0].append(column.count('A'))
-        profile[1].append(column.count('C'))
-        profile[2].append(column.count('G'))
-        profile[3].append(column.count('T'))
+        column_sum=0.0
+
+        for j in range(4):
+            column_sum += column.count(letters[j])+1
+
+        for j in range(4):
+            profile[j].append((column.count(letters[j])+1)/column_sum)
+
     return profile
 
 
@@ -336,6 +342,50 @@ def greedy_motif_search(dna, k, t):
     return best_motifs
 
 
+def get_motifs_using_profile(profile, dna):
+
+    motifs = []
+    k = len(profile[0])
+    for strand in dna:
+        motifs.append(profile_probable(strand,k,profile))
+    return motifs
+
+
+def randomized_motif_search(dna, k):
+
+    best_motifs, motifs = [], []
+
+    rand_ints = [random.randint(0, len(dna[0])-k-1) for i in range(len(dna))]
+    motifs = [dna[i][p:p+k] for i,p in enumerate(rand_ints)]
+
+    best_motifs = motifs
+    while True:
+        profile = create_profile_matrix(motifs)
+
+        motifs = get_motifs_using_profile(profile, dna)
+
+        if motif_score(motifs) < motif_score(best_motifs):
+            best_motifs = motifs
+        else:
+            return best_motifs
+
+
+def iterate_randomized_motif_search(dna, k, t):
+
+    best_motif = None
+
+    for i in range(1000):
+        if not best_motif:
+            best_motif = randomized_motif_search(dna, k)
+            continue
+
+        motifs = randomized_motif_search(dna, k)
+
+        if motif_score(motifs)< motif_score(best_motif):
+            best_motif = motifs
+
+    return best_motif
+
 if __name__=='__main__':
 
 
@@ -344,9 +394,6 @@ if __name__=='__main__':
     k, t = int(k), int(t)
     dna = [l.strip() for l in lines[1:]]
 
-    for m in greedy_motif_search(dna, k, t):
-        print m
-
-
-
+    for motif in iterate_randomized_motif_search(dna, k, t):
+        print motif
 
