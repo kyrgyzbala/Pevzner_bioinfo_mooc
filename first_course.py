@@ -255,15 +255,17 @@ def distance_between_pattern_and_strings(pattern, dna):
 
 def median_string(dna, k):
 
-    distance, median = None, None
+    distance, median = 10e200, []
 
     for i in range(pow(4, k)):
         pattern = number2pattern(i, k)
         pattern_distance = distance_between_pattern_and_strings(pattern, dna)
         if not distance or distance > pattern_distance:
             distance = pattern_distance
-            median = pattern
-    return median
+            median = [pattern]
+        elif distance == pattern_distance:
+            median.append(pattern)
+    return median, distance
 
 
 def profile_probable(text, k, profile):
@@ -291,6 +293,7 @@ def create_profile_matrix(motifs):
     letters = ['A', 'C', 'G', 'T']
     for i in range(len(motifs[0])):
         column = [l[i] for l in motifs]
+<<<<<<< Updated upstream
         column_sum=0.0
 
         for j in range(4):
@@ -299,6 +302,12 @@ def create_profile_matrix(motifs):
         for j in range(4):
             profile[j].append((column.count(letters[j])+1)/column_sum)
 
+=======
+        profile[0].append(column.count('A')+1)
+        profile[1].append(column.count('C')+1)
+        profile[2].append(column.count('G')+1)
+        profile[3].append(column.count('T')+1)
+>>>>>>> Stashed changes
     return profile
 
 
@@ -389,11 +398,25 @@ def iterate_randomized_motif_search(dna, k, t):
 if __name__=='__main__':
 
 
-    lines = open('data.txt').readlines()
-    k, t = lines[0].strip().split()
-    k, t = int(k), int(t)
-    dna = [l.strip() for l in lines[1:]]
+    # lines = open('data.txt').readlines()
+    # k, t = lines[0].strip().split()
+    # k, t = int(k), int(t)
+    # dna = [l.strip() for l in lines[1:]]
 
+    # for m in greedy_motif_search(dna, k, t):
+    #     print m
+
+<<<<<<< Updated upstream
     for motif in iterate_randomized_motif_search(dna, k, t):
         print motif
+=======
+    lines = open('data.txt').readlines()
+    lines = [l.strip() for l in lines]
+
+    for pattern in ['GTCAGCG', 'TAGTTTC', 'AACGCTG', 'ATAACGG', 'GTAGGAA', 'CGTGTAA']:
+        print pattern, distance_between_pattern_and_strings(pattern, lines)
+
+    # print median_string(lines,7)
+
+>>>>>>> Stashed changes
 
