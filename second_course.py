@@ -82,15 +82,29 @@ def debruijn_kmers(kmers):
 			graph[k] = [v]
 	return graph
 
+def is_universal(text):
+	alp = ['0','1']
+	all_kmers = [a+b+c for a in alp for b in alp for c in alp]
+	for kmer in all_kmers:
+		if kmer not in text:
+			return False
+	return True
+
 
 if __name__=='__main__':
-	lines=[l.strip() for l in open('data.txt').readlines()]
-	# k=int(lines[0])
-	# text=lines[1].strip()
-	graph = debruijn_kmers(lines)
-	keys = sorted(graph.keys())
-	for k in keys:
-		print '%s -> %s'%(k, ",".join(sorted(graph[k])))
-
-
+	# lines=[l.strip() for l in open('data.txt').readlines()]
+	# # k=int(lines[0])
+	# # text=lines[1].strip()
+	# graph = debruijn_kmers(lines)
+	# keys = sorted(graph.keys())
+	# for k in keys:
+	# 	print '%s -> %s'%(k, ",".join(sorted(graph[k])))
+	nums = ['1110001011',
+			'0111010010',
+			'0011101000',
+			'1001101100',
+			'0011100100',
+			'0111010001']
+	for n in nums:
+		print n, is_universal(n)
 	

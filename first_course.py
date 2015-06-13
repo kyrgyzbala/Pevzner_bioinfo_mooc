@@ -3,7 +3,9 @@ from timeit import Timer
 from Bio import Seq
 from Bio import SeqIO
 from collections import Counter
-import random
+from random import randint, randrange, uniform
+from numpy import cumsum, where
+
 
 def occurences(text, word):
     count= 0
@@ -293,21 +295,11 @@ def create_profile_matrix(motifs):
     letters = ['A', 'C', 'G', 'T']
     for i in range(len(motifs[0])):
         column = [l[i] for l in motifs]
-<<<<<<< Updated upstream
         column_sum=0.0
-
         for j in range(4):
             column_sum += column.count(letters[j])+1
-
         for j in range(4):
             profile[j].append((column.count(letters[j])+1)/column_sum)
-
-=======
-        profile[0].append(column.count('A')+1)
-        profile[1].append(column.count('C')+1)
-        profile[2].append(column.count('G')+1)
-        profile[3].append(column.count('T')+1)
->>>>>>> Stashed changes
     return profile
 
 
@@ -395,28 +387,81 @@ def iterate_randomized_motif_search(dna, k, t):
 
     return best_motif
 
+
+def profile_random_probable(text, k, profile):
+
+    t2n = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+
+    scores = []
+    for i in range(len(text)-k+1):
+        kmer = text[i:i+k]
+        tmp_score = 1
+        for pos, c in enumerate(kmer):
+            tmp_score *= profile[t2n[c]][pos]
+        scores.append(tmp_score)
+    
+    scores = cumsum(scores)
+    scores = scores/sum(scores)
+    rand_val = uniform(scores[0], scores[-1])
+
+    pos = where(scores==scores[scores>rand_val][0])[0]
+    
+    kmer = text[pos:pos+k]
+
+    return kmer
+
+
+def gibbs_sampler(dna, k, t, N):
+
+    best_motifs, best_score = [], 10e10
+
+    rand_ints = [randint(0, len(dna[0])-k-1) for i in range(len(dna))]
+    motifs = [dna[i][p:p+k] for i,p in enumerate(rand_ints)]
+
+    best_motifs = motifs
+    cnt = 0
+    while cnt < N:
+        i = randrange(t)
+        profile = create_profile_matrix(motifs)
+        motifs = motifs[:i] + [profile_random_probable(dna[i], k , profile)] + motifs[i+1:]
+        
+        if motif_score(motifs) < motif_score(best_motifs):
+            best_motifs = motifs
+            
+        cnt += 1
+    return best_motifs
+
+def iterate_gibbs_sampler(dna, k, t, N):
+    
+    best_motifs, best_score = [], 10e10
+
+    for i in range(100):
+        if i%10==0:
+            print i
+
+        cur_motifs = gibbs_sampler(dna, k, t, N)
+        cur_score = motif_score(cur_motifs)
+        if cur_score < best_score:
+            best_motifs = cur_motifs
+            best_score = cur_score
+    return best_motifs
+
+
 if __name__=='__main__':
 
 
-    # lines = open('data.txt').readlines()
-    # k, t = lines[0].strip().split()
-    # k, t = int(k), int(t)
-    # dna = [l.strip() for l in lines[1:]]
-
-    # for m in greedy_motif_search(dna, k, t):
-    #     print m
-
-<<<<<<< Updated upstream
-    for motif in iterate_randomized_motif_search(dna, k, t):
-        print motif
-=======
     lines = open('data.txt').readlines()
-    lines = [l.strip() for l in lines]
+    k, t, N = lines[0].strip().split()
+    k, t, N = int(k), int(t), int(N)
+    dna = [l.strip() for l in lines[1:]]
 
-    for pattern in ['GTCAGCG', 'TAGTTTC', 'AACGCTG', 'ATAACGG', 'GTAGGAA', 'CGTGTAA']:
-        print pattern, distance_between_pattern_and_strings(pattern, lines)
+    # from time import time
+    # t1 = time()
+    print '\n'.join(iterate_gibbs_sampler(dna, k, t, N))
+    # print (time()-t1)/60.0
+    # import cProfile
+    # cProfile.run('iterate_gibbs_sampler(dna, k, t, N)')
+    
 
-    # print median_string(lines,7)
 
->>>>>>> Stashed changes
 
