@@ -78,6 +78,19 @@ def debruijn_kmers(kmers):
 	return graph
 
 
+def debruijn_paired(kmers):
+	graph = {}
+	fmt="%s|%s"
+	for kmer in kmers:
+		[pair1, pair2] = kmer.split('|')
+		cur_node  = fmt%(pair1[:-1], pair2[:-1])
+		next_node = fmt%(pair1[1:],  pair2[1:])
+		if cur_node in graph:
+			graph[cur_node] += [new_node]
+		else:
+			graph[cur_node] = [next_node]
+	return graph
+
 def find_euler_cycle(graph):
 	path = []
 	# nodes = graph.keys()
@@ -167,25 +180,94 @@ def universal_string(k):
 			kmers = new_list
 	
 	return string_spell(find_euler_cycle(debruijn_kmers(kmers))[:-k+1])
+
+
+def paired_composition(k, d, text):
+
+	composition = []
+	for i in range(len(text)-2*k-d+1):
+		composition.append([text[i:i+k], text[i+k+d:i+2*k+d]])
+	return composition
+
+
+def string_spelled_by_gapped_patterns(patterns, k, d):
+	first_patterns = [p.split('|')[0] for p in patterns]
+	second_patterns = [p.split('|')[1] for p in patterns]
+	prefix_string = string_spell(first_patterns)
+	suffix_string = string_spell(second_patterns)
+	for i in range(k+d+1, len(prefix_string)):
+		if prefix_string[i]!=suffix_string[i-k-d]:
+			return None
 	
+	return prefix_string+suffix_string[-k-d:]
+
+# def span(start, graph, path):
+# 		if len(path)==16:			
+# 			return path
+# 		else:
+# 			for node in graph[start]:
+# 				if node not in path:
+# 					return span(node, graph, path+[node])
+
+
+def maximal_non_branching_paths(graph):
+	paths = []
+
+	nodes = []
+	for k,v in graph.items():
+		nodes += [k] + v
+	nodes = sorted(set(nodes))
+	
+	M = np.zeros((len(nodes), len(nodes)))
+	
+	for k in graph.keys():
+		ind_y = nodes.index(k)
+		for n in graph[k]:
+			ind_x = nodes.index(n)
+			M[ind_y, ind_x]=1
+	
+	for node in nodes:
+		node_ind = nodes.index(node)
+		node_in = np.sum(M[:, node_ind])
+		node_out = np.sum(M[node_ind, :])
+		if not node_in==node_out==1 and node_out>0:
+			for adj_node in graph[node]:
+				non_branching_path = [node, adj_node]
+				adj_node_ind = nodes.index(adj_node)
+				while np.sum(M[:, adj_node_ind])==np.sum(M[adj_node_ind, :])==1:
+					adj_node = graph[adj_node][0]
+					adj_node_ind = nodes.index(adj_node)
+					non_branching_path.append(adj_node)
+				paths.append(non_branching_path)
+
+	visited = set(sum(paths, []))
+	left_nodes = set(graph.keys())-visited
+	while left_nodes:
+		node = left_nodes.pop()
+		path = [node]
+		if node in graph:
+			adj_node = graph[node][0]
+			path.append(adj_node)
+			while adj_node in graph and adj_node!=node:
+				adj_node = graph[adj_node][0]
+				path.append(adj_node)
+		paths.append(path)
+		visited.update(path)
+		left_nodes = set(graph.keys())-visited
+	return paths
+
+
 
 if __name__=='__main__':
 	lines=[l.strip() for l in open('data.txt').readlines()]
 	kmers=[l.strip() for l in lines[1:]]
-	k=int(lines[0])
-	# text=lines[1].strip()
- eb42f19cb391b3ea5945d6c821a0604dddccfefd
-	# graph = debruijn_kmers(lines)
-	# keys = sorted(graph.keys())
-	# for k in keys:
-	# 	print '%s -> %s'%(k, ",".join(sorted(graph[k])))
 
-	# graph = read_graph(lines)
-	# euler_path = find_euler_path(graph)
-	# print "->".join(euler_path)
-
-	
-	# print "->".join(euler_path)
-	# print euler_path
 	# print string_spell(find_euler_path(debruijn_kmers(kmers)))
-	print universal_string(9)
+
+	# k = int(lines[0].split()[0])
+	# d = int(lines[0].split()[1])
+	# for i in range(10):
+		# print find_euler_path(debruijn_paired(kmers))
+	# print string_spelled_by_gapped_patterns(find_euler_path(debruijn_paired(kmers)), k, d)
+	for path in maximal_non_branching_paths(read_graph(lines)):
+		print " -> ".join(path)
