@@ -1,5 +1,10 @@
+#!/sw/bin/python2.7
+
 import sys
 import numpy as np
+from random import shuffle
+from Bio.Seq import Seq
+from Bio import SeqIO
 
 
 def string_composition(k, text):
@@ -86,30 +91,42 @@ def debruijn_paired(kmers):
 		cur_node  = fmt%(pair1[:-1], pair2[:-1])
 		next_node = fmt%(pair1[1:],  pair2[1:])
 		if cur_node in graph:
-			graph[cur_node] += [new_node]
+			graph[cur_node] += [next_node]
 		else:
 			graph[cur_node] = [next_node]
 	return graph
 
-def find_euler_cycle(graph):
+def find_euler_cycle(graph, v):
 	path = []
-	# nodes = graph.keys()
-	nodes = sorted(graph.keys())
-	stack = [nodes[0]]
+	stack = [v]
 	visited_edges = []
 
 	while stack:
 		cur_node = stack[-1]
 		new_edges = [v for v in graph[cur_node] if '%s-%s'%(cur_node, v) not in visited_edges]
+		shuffle(new_edges)
+
 		if new_edges:
 			new_node = new_edges[0]
 			visited_edges.append('%s-%s'%(cur_node, new_node))
 			stack.append(new_node)
-		else:			
+		else:
 			path.append(stack.pop())
 
 	path.reverse()
 	return path
+
+
+def find_euler_cycles(graph, v, path = []):
+	if not [edges for edges in graph.values() if edges!=[]]:
+		yield path
+	for w in graph[v]:
+		graph[v].remove(w)
+		path.append(w)
+		for p in find_euler_cycles(graph, w, path):
+			yield p
+		path.pop()
+		graph[v].append(w)
 
 
 def find_euler_path(graph):
@@ -123,7 +140,7 @@ def find_euler_path(graph):
 		ind_y = nodes.index(k)
 		for n in graph[k]:
 			ind_x = nodes.index(n)
-			M[ind_y, ind_x]=1
+			M[ind_y, ind_x]+=1
 	
 	unbalanced_indices = [i for i in range(len(nodes)) if np.sum(M[i,:])!=np.sum(M[:,i])]
 
@@ -147,12 +164,58 @@ def find_euler_path(graph):
 			else:
 				graph[second]=[first]
 
-		euler_cycle = find_euler_cycle(graph)
-		euler_cycle = euler_cycle[:-1]
+		euler_cycle = find_euler_cycle(graph, first)
 		pivot = euler_cycle.index(pivot)
 		return euler_cycle[pivot:] + euler_cycle[:pivot]
 	
 	euler_cycle = find_euler_cycle(graph)
+	euler_cycle = euler_cycle[:-1]
+	return euler_cycle
+
+
+def find_euler_paths(graph):
+	nodes = []
+	for k,v in graph.items():
+		nodes += [k] + v
+	nodes = sorted(set(nodes))
+	M = np.zeros((len(nodes), len(nodes)))
+	
+	for k in graph.keys():
+		ind_y = nodes.index(k)
+		for n in graph[k]:
+			ind_x = nodes.index(n)
+			M[ind_y, ind_x]+=1
+	
+	unbalanced_indices = [i for i in range(len(nodes)) if np.sum(M[i,:])!=np.sum(M[:,i])]
+
+	assert(len(unbalanced_indices) in [2,0])
+
+	if len(unbalanced_indices)==2:
+		ind1 = unbalanced_indices[0]
+		ind2 = unbalanced_indices[1]
+
+		first, second = nodes[ind1], nodes[ind2]
+		if sum(M[:,ind1])>sum(M[ind1,:]):
+			pivot = second
+			if first in graph:
+				graph[first].append(second)
+			else:
+				graph[first]=[second]
+		elif sum(M[:,ind2])>sum(M[ind2,:]):
+			pivot = first
+			if second in graph:
+				graph[second].append(first)
+			else:
+				graph[second]=[first]
+
+		paths = []
+		for euler_cycle in find_euler_cycles(graph, first):
+			tmp_pivot = euler_cycle.index(pivot)
+			path = euler_cycle[tmp_pivot:] + euler_cycle[:tmp_pivot]
+			if path not in paths:
+				paths.append(path)
+		return paths
+	euler_cycle = find_euler_cycle(graph, first)
 	euler_cycle = euler_cycle[:-1]
 	return euler_cycle
 
@@ -195,19 +258,15 @@ def string_spelled_by_gapped_patterns(patterns, k, d):
 	second_patterns = [p.split('|')[1] for p in patterns]
 	prefix_string = string_spell(first_patterns)
 	suffix_string = string_spell(second_patterns)
+
+	# print prefix_string
+	# print suffix_string
+
 	for i in range(k+d+1, len(prefix_string)):
 		if prefix_string[i]!=suffix_string[i-k-d]:
 			return None
 	
 	return prefix_string+suffix_string[-k-d:]
-
-# def span(start, graph, path):
-# 		if len(path)==16:			
-# 			return path
-# 		else:
-# 			for node in graph[start]:
-# 				if node not in path:
-# 					return span(node, graph, path+[node])
 
 
 def maximal_non_branching_paths(graph):
@@ -224,8 +283,9 @@ def maximal_non_branching_paths(graph):
 		ind_y = nodes.index(k)
 		for n in graph[k]:
 			ind_x = nodes.index(n)
-			M[ind_y, ind_x]=1
-	
+			M[ind_y, ind_x]+=1
+
+
 	for node in nodes:
 		node_ind = nodes.index(node)
 		node_in = np.sum(M[:, node_ind])
@@ -257,17 +317,67 @@ def maximal_non_branching_paths(graph):
 	return paths
 
 
+def coding_sequences(dna,protein):
+	out=[]
+	gene_len = len(protein)*3
+	print len(dna)
+
+	for i in range(len(dna)-gene_len+1):
+		if i%500000==0:
+			print i
+		chunk=dna[i:i+gene_len]
+		if protein==str(Seq(chunk).translate()):
+			out.append(chunk)
+		if protein==str(Seq(chunk).reverse_complement().translate()):
+			out.append(chunk)
+	return out
+
+aa_masses = {'G': 57, 'A': 71, 'S': 87, 'P': 97, 'V': 99, 'T': 101, 'C': 103, 'I': 113, 
+			 'L': 113, 'N': 114, 'D': 115, 'K': 128, 'Q': 128, 'E': 129, 'M': 131, 
+			 'H': 137, 'F': 147, 'R': 156, 'Y': 163, 'W': 186}
+
+
+def linear_spectrum(peptide):
+	prefix_mass = [0]
+	for aa in peptide:
+		prefix_mass.append(prefix_mass[-1]+aa_masses[aa])
+	
+	spectrum = [0]
+	for i in range(len(peptide)):
+		for j in range(i+1, len(peptide)+1):
+			spectrum.append(prefix_mass[j]-prefix_mass[i])
+	return sorted(spectrum)
+
+
+def cyclic_spectrum(peptide):
+	prefix_mass = [0]
+	for aa in peptide:
+		prefix_mass.append(prefix_mass[-1]+aa_masses[aa])
+	
+	peptide_mass = prefix_mass[-1]
+
+	spectrum = [0]
+	for i in range(len(peptide)):
+		for j in range(i+1, len(peptide)+1):
+			spectrum.append(prefix_mass[j]-prefix_mass[i])
+			if i>0 and j<len(peptide):
+				spectrum.append(peptide_mass-(prefix_mass[j]-prefix_mass[i]))
+	return sorted(spectrum)
+
+
+aa_masses_2 = [57, 71, 87, 97, 99, 101, 103, 113, 114, 115, 128, 129, 131, 137, 147, 156, 163, 186]
+
+
+def matching_peptides(mass):
+	combinations = []
+	
+
+
+
+
 
 if __name__=='__main__':
 	lines=[l.strip() for l in open('data.txt').readlines()]
-	kmers=[l.strip() for l in lines[1:]]
 
-	# print string_spell(find_euler_path(debruijn_kmers(kmers)))
+	print " ".join([str(i) for i in cyclic_spectrum(lines[0])])
 
-	# k = int(lines[0].split()[0])
-	# d = int(lines[0].split()[1])
-	# for i in range(10):
-		# print find_euler_path(debruijn_paired(kmers))
-	# print string_spelled_by_gapped_patterns(find_euler_path(debruijn_paired(kmers)), k, d)
-	for path in maximal_non_branching_paths(read_graph(lines)):
-		print " -> ".join(path)
